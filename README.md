@@ -8,6 +8,14 @@ In short: **your DBA curates a menu of approved queries instead of handing out t
 
 It ships as Docker images and sits next to an existing PostgreSQL, MySQL/MariaDB or H2 database.
 
+## How it works
+
+The DBA publishes a query once. Engineers then call the endpoint and never see the database.
+
+| Publishing (DBA) | Calling (engineer) |
+|---|---|
+| ![Publishing flow: DBA submits a query in the builder, which validates it and publishes version 1](docs/images/publish-flow.gif) | ![Request flow: engineer calls the runtime, which fetches the definition from the builder and queries the database read-only](docs/images/request-flow.gif) |
+
 ## Two planes
 
 ```
