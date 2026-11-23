@@ -18,21 +18,7 @@ The DBA publishes a query once. Engineers then call the endpoint and never see t
 
 ## Two planes
 
-```
-                                   admin login
-   DBA ─────────────────────────────────▶ ┌───────────────────────────────┐
-   (designs & publishes queries)          │  builder  :8080  CONTROL PLANE │  ← keep private
-                                          │  web UI + publish + metadata   │
-                                          └───────────────┬───────────────┘
-                                                          │ resolve definition (HTTP, internal)
-   engineers ───────────────────────────▶ ┌───────────────┴───────────────┐
-   (call published APIs, no login)        │  runtime  :8081  DATA PLANE    │  ← share with engineers
-                                          │  serves /api/** (read-only)    │
-                                          └───────────────┬───────────────┘
-                                                          │ reads only, read-only account
-                                                          ▼
-                                             your database (Postgres / MySQL / H2)
-```
+![System flow: engineers call the runtime data plane, which reads from the database, while the DBA uses the builder control plane](docs/images/system-flow.gif)
 
 | Service | Port | Plane | Who | Notes |
 |---|---|---|---|---|
