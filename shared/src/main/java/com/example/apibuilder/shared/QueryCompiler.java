@@ -81,11 +81,11 @@ public class QueryCompiler {
             String quoted = quote(column.name());
             switch (filter.operator()) {
                 case CONTAINS -> {
-                    conditions.add("LOWER(" + quoted + ") LIKE ? ESCAPE '\\'");
+                    conditions.add("LOWER(" + quoted + ") LIKE ? ESCAPE '!'");
                     args.add("%" + likeLiteral(raw) + "%");
                 }
                 case STARTS_WITH -> {
-                    conditions.add("LOWER(" + quoted + ") LIKE ? ESCAPE '\\'");
+                    conditions.add("LOWER(" + quoted + ") LIKE ? ESCAPE '!'");
                     args.add(likeLiteral(raw) + "%");
                 }
                 default -> {
@@ -96,8 +96,8 @@ public class QueryCompiler {
         }
 
         StringBuilder sql = new StringBuilder("SELECT ")
-                .append(query.columns().stream().map(QueryCompiler::quote).collect(Collectors.joining(", ")))
-                .append(" FROM ").append(quote(schema.schema())).append('.').append(quote(table.name()));
+                .append(query.columns().stream().map(this::quote).collect(Collectors.joining(", ")))
+                .append(" FROM ").append(schema.qualifiedTable(table.name()));
         if (!conditions.isEmpty()) {
             sql.append(" WHERE ").append(String.join(" AND ", conditions));
         }
@@ -106,7 +106,7 @@ public class QueryCompiler {
                     .map(sort -> quote(sort.column()) + " " + sort.direction())
                     .collect(Collectors.joining(", ")));
         }
-        sql.append(" FETCH FIRST ").append(query.limit()).append(" ROWS ONLY");
+        sql.append(" LIMIT ").append(query.limit());
         return new CompiledQuery(sql.toString(), args, query);
     }
 
@@ -224,13 +224,16 @@ public class QueryCompiler {
         }
     }
 
-    /** Lower-cases a search term and escapes LIKE wildcards so it only ever matches literally. */
+    /**
+     * Lower-cases a search term and escapes LIKE wildcards so it only ever matches literally. The escape
+     * character is '!' because backslash is treated differently by different databases.
+     */
     private static String likeLiteral(String raw) {
-        return raw.toLowerCase(Locale.ROOT).replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_");
+        return raw.toLowerCase(Locale.ROOT).replace("!", "!!").replace("%", "!%").replace("_", "!_");
     }
 
-    private static String quote(String identifier) {
-        return '"' + identifier.replace("\"", "\"\"") + '"';
+    private String quote(String identifier) {
+        return schema.quote(identifier);
     }
 
     private static <T> List<T> orEmpty(List<T> list) {

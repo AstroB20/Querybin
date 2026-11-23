@@ -1,0 +1,71 @@
+# API Builder as containers. Configure it with a .env file (see .env.example):
+#
+#   docker compose up --build -d
+#
+# Two services:
+#   builder  - the control plane. The DBA opens this to design and publish APIs. Admin login required.
+#              Published on 127.0.0.1 by default, so only the host (the DBA) can reach it.
+#   runtime  - the data plane. Serves the published /api/** that engineers call. No login.
+
+name: api-builder
+
+x-target-db: &target-db
+  SPRING_DATASOURCE_URL: ${TARGET_DB_URL:?Set TARGET_DB_URL in .env - see .env.example}
+  SPRING_DATASOURCE_USERNAME: ${TARGET_DB_USER:?Set TARGET_DB_USER in .env - see .env.example}
+  SPRING_DATASOURCE_PASSWORD: ${TARGET_DB_PASSWORD:-}
+  APP_TARGET_SCHEMA: ${TARGET_DB_SCHEMA:-}
+
+services:
+  builder:
+    image: api-builder/builder:local
+    build:
+      context: .
+      args:
+        MODULE: builder-service
+    environment:
+      <<: *target-db
+      # The builder creates/seeds nothing in your database; the demo database seeds itself.
+      APP_ADMIN_USERNAME: ${ADMIN_USERNAME:-admin}
+      APP_ADMIN_PASSWORD: ${ADMIN_PASSWORD:?Set ADMIN_PASSWORD in .env - see .env.example}
+      APP_PUBLIC_BASE_URL: ${RUNTIME_PUBLIC_URL:-http://localhost:8081}
+      APP_INTERNAL_TOKEN: ${INTERNAL_TOKEN:-}
+    volumes:
+      # Published APIs and their version history (the builder's private metadata database).
+      - metadata:/data
+    ports:
+      # Control plane: the DBA only. Keep this bound to localhost.
+      - "${BUILDER_BIND:-127.0.0.1}:${BUILDER_PORT:-8080}:8080"
+    restart: unless-stopped
+
+  runtime:
+    image: api-builder/runtime:local
+    build:
+      context: .
+      args:
+        MODULE: runtime-service
+    environment:
+      <<: *target-db
+      BUILDER_BASE_URL: http://builder:8080
+      BUILDER_INTERNAL_TOKEN: ${INTERNAL_TOKEN:-}
+    ports:
+      # Data plane: where engineers call published APIs. Set RUNTIME_BIND=0.0.0.0 to share it.
+      - "${RUNTIME_BIND:-127.0.0.1}:${RUNTIME_PORT:-8081}:8081"
+    depends_on:
+      - builder
+    restart: unless-stopped
+
+  # A PostgreSQL database with sample tables, for trying things out. Only starts under the "demo"
+  # profile (COMPOSE_PROFILES=demo, which .env.example sets).
+  demo-db:
+    image: postgres:17-alpine
+    profiles: ["demo"]
+    environment:
+      POSTGRES_DB: demo
+      POSTGRES_USER: demo
+      POSTGRES_PASSWORD: demo
+    volumes:
+      - ./shared/src/main/resources/sample-schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+      - ./shared/src/main/resources/sample-data.sql:/docker-entrypoint-initdb.d/02-data.sql:ro
+
+volumes:
+  metadata:

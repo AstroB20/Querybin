@@ -25,7 +25,6 @@
         <module>shared</module>
         <module>builder-service</module>
         <module>runtime-service</module>
-        <module>gateway</module>
     </modules>
 
     <dependencyManagement>

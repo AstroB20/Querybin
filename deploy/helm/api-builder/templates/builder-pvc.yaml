@@ -1,0 +1,17 @@
+{{- if and .Values.builder.persistence.enabled (not .Values.builder.persistence.existingClaim) }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ printf "%s-data" (include "api-builder.builderName" .) }}
+  labels:
+    {{- include "api-builder.labels" . | nindent 4 }}
+spec:
+  accessModes:
+    - ReadWriteOnce
+  {{- with .Values.builder.persistence.storageClass }}
+  storageClassName: {{ . }}
+  {{- end }}
+  resources:
+    requests:
+      storage: {{ .Values.builder.persistence.size }}
+{{- end }}

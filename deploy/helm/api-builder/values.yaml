@@ -1,0 +1,56 @@
+# Images must be built from the repository Dockerfile (MODULE=builder-service and MODULE=runtime-service)
+# and pushed to a registry the cluster can pull from.
+images:
+  builder:
+    repository: api-builder/builder
+    tag: local
+  runtime:
+    repository: api-builder/runtime
+    tag: local
+  pullPolicy: IfNotPresent
+  pullSecrets: []
+
+# The database whose tables become APIs. Use a read-only account.
+targetDatabase:
+  url: ""        # e.g. jdbc:postgresql://db.example.internal:5432/app (required)
+  username: ""   # (required)
+  password: ""   # ignored when secrets.existingSecret is set
+  schema: ""     # PostgreSQL schema or MySQL database; empty = connection default
+
+# Credentials. Either let the chart create a Secret from these values, or point existingSecret at
+# a Secret you manage that contains the keys adminPassword, targetDbPassword and internalToken.
+secrets:
+  existingSecret: ""
+  internalToken: ""   # optional shared secret between runtime and builder
+
+builder:
+  adminUsername: admin
+  adminPassword: ""   # required unless secrets.existingSecret is set
+  persistence:
+    # Published APIs and version history live in /data. Keep this enabled, or history is lost on restart.
+    enabled: true
+    size: 1Gi
+    storageClass: ""
+    existingClaim: ""
+  ingress:
+    # Off by default: the builder is for the DBA only. Enable only behind your own access controls.
+    enabled: false
+    className: ""
+    host: ""
+    annotations: {}
+    tls: []
+  resources: {}
+
+runtime:
+  replicaCount: 2
+  # Public URL where engineers reach the runtime. Used in the builder's generated cURL commands.
+  publicUrl: ""       # e.g. https://apis.example.com (required)
+  ingress:
+    enabled: false
+    className: ""
+    host: ""
+    annotations: {}
+    tls: []
+  service:
+    type: ClusterIP
+  resources: {}

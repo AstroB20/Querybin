@@ -1,0 +1,83 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "api-builder.builderName" . }}
+  labels:
+    {{- include "api-builder.labels" . | nindent 4 }}
+    app.kubernetes.io/name: builder
+    app.kubernetes.io/component: builder
+spec:
+  # One replica only: the builder's metadata database is a single-writer file.
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/instance: {{ .Release.Name }}
+      app.kubernetes.io/component: builder
+  template:
+    metadata:
+      labels:
+        {{- include "api-builder.labels" . | nindent 8 }}
+        app.kubernetes.io/name: builder
+        app.kubernetes.io/component: builder
+    spec:
+      {{- with .Values.images.pullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        fsGroup: 10001
+      containers:
+        - name: builder
+          image: {{ printf "%s:%s" .Values.images.builder.repository .Values.images.builder.tag | quote }}
+          imagePullPolicy: {{ .Values.images.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: 8080
+          env:
+            {{- include "api-builder.targetDbEnv" . | nindent 12 }}
+            - name: APP_ADMIN_USERNAME
+              value: {{ .Values.builder.adminUsername | quote }}
+            - name: APP_ADMIN_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "api-builder.secretName" . }}
+                  key: adminPassword
+            - name: APP_PUBLIC_BASE_URL
+              value: {{ required "runtime.publicUrl is required" .Values.runtime.publicUrl | quote }}
+            - name: APP_INTERNAL_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "api-builder.secretName" . }}
+                  key: internalToken
+                  optional: true
+          volumeMounts:
+            - name: data
+              mountPath: /data
+          readinessProbe:
+            tcpSocket:
+              port: http
+            initialDelaySeconds: 20
+            periodSeconds: 10
+          livenessProbe:
+            tcpSocket:
+              port: http
+            initialDelaySeconds: 60
+            periodSeconds: 20
+          securityContext:
+            allowPrivilegeEscalation: false
+          {{- with .Values.builder.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+      volumes:
+        - name: data
+          {{- if .Values.builder.persistence.enabled }}
+          persistentVolumeClaim:
+            claimName: {{ .Values.builder.persistence.existingClaim | default (printf "%s-data" (include "api-builder.builderName" .)) }}
+          {{- else }}
+          emptyDir: {}
+          {{- end }}

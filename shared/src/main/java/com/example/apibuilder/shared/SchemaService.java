@@ -1,7 +1,10 @@
 package com.example.apibuilder.shared;
 
 import java.math.BigDecimal;
+import java.sql.Connection;
+import java.sql.DatabaseMetaData;
 import java.sql.ResultSet;
+import java.sql.SQLException;
 import java.sql.Types;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -17,24 +20,77 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 
 /**
- * Describes the tables that published APIs may query. By default this is the {@code PUBLIC} schema of the
- * connected database; point it at another schema with {@code app.target-schema}. The builder's own
- * metadata lives in a separate schema that is never exposed here.
+ * Describes the tables that published APIs may query: one schema of the connected (target) database.
+ * By default that is the connection's current schema; choose another with {@code app.target-schema}.
+ * Works with databases that namespace tables by schema (PostgreSQL, H2) or by catalog (MySQL, MariaDB).
  */
 @Service
 public class SchemaService {
 
-    private final JdbcTemplate jdbc;
-    private final String schema;
+    /** Where the queryable tables live and how this database quotes identifiers. */
+    private record Target(String catalog, String schema, String quote) {
 
-    public SchemaService(JdbcTemplate jdbc, @Value("${app.target-schema:PUBLIC}") String schema) {
-        this.jdbc = jdbc;
-        this.schema = schema;
+        String namespace() {
+            return schema != null ? schema : catalog;
+        }
     }
 
-    /** The database schema that published APIs are allowed to read. */
-    public String schema() {
-        return schema;
+    private final JdbcTemplate jdbc;
+    private final String configuredSchema;
+    private volatile Target target;
+
+    public SchemaService(JdbcTemplate jdbc, @Value("${app.target-schema:}") String configuredSchema) {
+        this.jdbc = jdbc;
+        this.configuredSchema = configuredSchema == null ? "" : configuredSchema.trim();
+    }
+
+    /** Quotes an identifier the way the target database expects. */
+    public String quote(String identifier) {
+        String quote = target().quote();
+        return quote + identifier.replace(quote, quote + quote) + quote;
+    }
+
+    /** The fully qualified, quoted name of a table in the target schema. */
+    public String qualifiedTable(String tableName) {
+        String namespace = target().namespace();
+        return namespace == null ? quote(tableName) : quote(namespace) + "." + quote(tableName);
+    }
+
+    /** Resolved on first use, so the service can start before the target database is reachable. */
+    private Target target() {
+        Target resolved = target;
+        if (resolved == null) {
+            resolved = jdbc.execute((ConnectionCallback<Target>) this::resolveTarget);
+            target = resolved;
+        }
+        return resolved;
+    }
+
+    private Target resolveTarget(Connection connection) throws SQLException {
+        DatabaseMetaData metaData = connection.getMetaData();
+        String quote = metaData.getIdentifierQuoteString();
+        if (quote == null || quote.isBlank()) {
+            quote = "\"";
+        }
+        boolean usesSchemas = metaData.supportsSchemasInTableDefinitions();
+        String name;
+        if (configuredSchema.isEmpty()) {
+            name = usesSchemas ? connection.getSchema() : connection.getCatalog();
+            if (name == null || name.isBlank()) {
+                throw new IllegalStateException("The database connection has no default "
+                        + (usesSchemas ? "schema" : "database") + "; set app.target-schema.");
+            }
+        } else {
+            List<String> available = new ArrayList<>();
+            try (ResultSet rs = usesSchemas ? metaData.getSchemas() : metaData.getCatalogs()) {
+                while (rs.next()) {
+                    available.add(rs.getString(1));
+                }
+            }
+            name = match(available, item -> item, configuredSchema).orElseThrow(() -> new IllegalStateException(
+                    "app.target-schema '" + configuredSchema + "' does not exist in the target database."));
+        }
+        return usesSchemas ? new Target(null, name, quote) : new Target(name, null, quote);
     }
 
     /** How a filter value arriving as text is converted before it is bound to the query. */
@@ -103,9 +159,12 @@ public class SchemaService {
     }
 
     public List<Table> tables() {
+        Target where = target();
         return jdbc.execute((ConnectionCallback<List<Table>>) connection -> {
+            DatabaseMetaData metaData = connection.getMetaData();
             Map<String, List<Column>> columnsByTable = new LinkedHashMap<>();
-            try (ResultSet rs = connection.getMetaData().getColumns(null, schema, "%", "%")) {
+            try (ResultSet rs = metaData.getColumns(where.catalog(),
+                    literalPattern(where.schema(), metaData.getSearchStringEscape()), "%", "%")) {
                 while (rs.next()) {
                     columnsByTable.computeIfAbsent(rs.getString("TABLE_NAME"), name -> new ArrayList<>())
                             .add(new Column(rs.getString("COLUMN_NAME"), rs.getString("TYPE_NAME"),
@@ -120,6 +179,14 @@ public class SchemaService {
 
     public Optional<Table> findTable(String tableName) {
         return match(tables(), Table::name, tableName);
+    }
+
+    /** The schema argument of getColumns is a LIKE pattern, so its wildcards must be escaped. */
+    private static String literalPattern(String name, String escape) {
+        if (name == null || escape == null || escape.isEmpty()) {
+            return name;
+        }
+        return name.replace(escape, escape + escape).replace("_", escape + "_").replace("%", escape + "%");
     }
 
     /** Prefers an exact match, then falls back to ignoring case so callers need not shout. */

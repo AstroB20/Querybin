@@ -30,11 +30,14 @@ public class BuilderClient {
 
     private final RestClient client;
     private final JsonMapper json;
+    private final String internalToken;
 
     public BuilderClient(JsonMapper json,
-                         @Value("${builder.base-url:http://127.0.0.1:8081}") String baseUrl) {
+                         @Value("${builder.base-url:http://127.0.0.1:8080}") String baseUrl,
+                         @Value("${builder.internal-token:}") String internalToken) {
         this.client = RestClient.builder().baseUrl(baseUrl).build();
         this.json = json;
+        this.internalToken = internalToken == null ? "" : internalToken.trim();
     }
 
     public ResolvedApi resolve(String slug, Integer version) {
@@ -43,6 +46,11 @@ public class BuilderClient {
                     .uri(uriBuilder -> uriBuilder.path("/internal/apis/{slug}/resolve")
                             .queryParamIfPresent("version", java.util.Optional.ofNullable(version))
                             .build(slug))
+                    .headers(headers -> {
+                        if (!internalToken.isEmpty()) {
+                            headers.add("X-Internal-Token", internalToken);
+                        }
+                    })
                     .exchange((request, response) -> {
                         HttpStatusCode status = response.getStatusCode();
                         if (status.is2xxSuccessful()) {

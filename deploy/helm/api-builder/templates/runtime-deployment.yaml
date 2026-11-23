@@ -1,0 +1,61 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "api-builder.runtimeName" . }}
+  labels:
+    {{- include "api-builder.labels" . | nindent 4 }}
+    app.kubernetes.io/name: runtime
+    app.kubernetes.io/component: runtime
+spec:
+  replicas: {{ .Values.runtime.replicaCount }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/instance: {{ .Release.Name }}
+      app.kubernetes.io/component: runtime
+  template:
+    metadata:
+      labels:
+        {{- include "api-builder.labels" . | nindent 8 }}
+        app.kubernetes.io/name: runtime
+        app.kubernetes.io/component: runtime
+    spec:
+      {{- with .Values.images.pullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+      containers:
+        - name: runtime
+          image: {{ printf "%s:%s" .Values.images.runtime.repository .Values.images.runtime.tag | quote }}
+          imagePullPolicy: {{ .Values.images.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: 8081
+          env:
+            {{- include "api-builder.targetDbEnv" . | nindent 12 }}
+            - name: BUILDER_BASE_URL
+              value: {{ printf "http://%s:8080" (include "api-builder.builderName" .) | quote }}
+            - name: BUILDER_INTERNAL_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "api-builder.secretName" . }}
+                  key: internalToken
+                  optional: true
+          readinessProbe:
+            tcpSocket:
+              port: http
+            initialDelaySeconds: 15
+            periodSeconds: 10
+          livenessProbe:
+            tcpSocket:
+              port: http
+            initialDelaySeconds: 45
+            periodSeconds: 20
+          securityContext:
+            allowPrivilegeEscalation: false
+          {{- with .Values.runtime.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}

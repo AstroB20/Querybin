@@ -1,0 +1,63 @@
+{{- if .Values.runtime.ingress.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ include "api-builder.runtimeName" . }}
+  labels:
+    {{- include "api-builder.labels" . | nindent 4 }}
+  {{- with .Values.runtime.ingress.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  {{- with .Values.runtime.ingress.className }}
+  ingressClassName: {{ . }}
+  {{- end }}
+  {{- with .Values.runtime.ingress.tls }}
+  tls:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  rules:
+    - host: {{ required "runtime.ingress.host is required when the ingress is enabled" .Values.runtime.ingress.host | quote }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ include "api-builder.runtimeName" . }}
+                port:
+                  number: 8081
+{{- end }}
+{{- if .Values.builder.ingress.enabled }}
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ include "api-builder.builderName" . }}
+  labels:
+    {{- include "api-builder.labels" . | nindent 4 }}
+  {{- with .Values.builder.ingress.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  {{- with .Values.builder.ingress.className }}
+  ingressClassName: {{ . }}
+  {{- end }}
+  {{- with .Values.builder.ingress.tls }}
+  tls:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  rules:
+    - host: {{ required "builder.ingress.host is required when the ingress is enabled" .Values.builder.ingress.host | quote }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ include "api-builder.builderName" . }}
+                port:
+                  number: 8080
+{{- end }}

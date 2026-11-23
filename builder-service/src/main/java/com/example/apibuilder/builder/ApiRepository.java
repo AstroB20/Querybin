@@ -9,6 +9,7 @@ import java.util.Optional;
 
 import com.example.apibuilder.shared.QueryDefinition;
 
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 
@@ -39,7 +40,7 @@ class ApiRepository {
     private final JdbcClient jdbc;
     private final JsonMapper json;
 
-    ApiRepository(JdbcClient jdbc, JsonMapper json) {
+    ApiRepository(@Qualifier(MetadataConfig.METADATA) JdbcClient jdbc, JsonMapper json) {
         this.jdbc = jdbc;
         this.json = json;
     }

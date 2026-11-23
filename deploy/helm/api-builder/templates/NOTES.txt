@@ -1,0 +1,18 @@
+API Builder is installed in namespace {{ .Release.Namespace }} as release {{ .Release.Name }}.
+
+Open the builder (DBA only) with a port-forward:
+  kubectl -n {{ .Release.Namespace }} port-forward svc/{{ include "api-builder.builderName" . }} 8080:8080
+  then browse to http://localhost:8080 and sign in as {{ .Values.builder.adminUsername }}.
+
+Published APIs are served by the runtime at {{ .Values.runtime.publicUrl | default "(runtime.publicUrl not set)" }}/api/<slug>
+Inside the cluster the runtime is reachable at:
+  http://{{ include "api-builder.runtimeName" . }}.{{ .Release.Namespace }}.svc.cluster.local:8081/api/<slug>
+{{- if not .Values.runtime.ingress.enabled }}
+
+The runtime has no Ingress. To reach it from outside the cluster, enable runtime.ingress or port-forward it:
+  kubectl -n {{ .Release.Namespace }} port-forward svc/{{ include "api-builder.runtimeName" . }} 8081:8081
+{{- end }}
+{{- if not .Values.builder.persistence.enabled }}
+
+WARNING: builder.persistence is disabled. Published APIs and their version history will be lost when the builder pod restarts.
+{{- end }}

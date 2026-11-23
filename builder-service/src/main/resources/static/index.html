@@ -328,7 +328,7 @@
   function updateHint() {
     const slug = state.current ? state.current.slug : $('slug').value.trim();
     $('endpointHint').textContent = slug
-      ? `${state.current ? 'Served' : 'Will be served'} at GET ${location.origin}/api/${slug}`
+      ? `${state.current ? 'Served' : 'Will be served'} at GET ${state.publicBaseUrl || ''}/api/${slug}`
       : 'Pick a name: it becomes the URL of your API.';
   }
 
@@ -537,6 +537,8 @@
 
   guard(async () => {
     if (/Win/i.test(navigator.userAgent)) $('curlShell').value = 'POWERSHELL';
+    const config = await call('GET', '/builder/config');
+    state.publicBaseUrl = config.publicBaseUrl || '';
     state.schema = await call('GET', '/builder/schema');
     $('table').replaceChildren(...state.schema.map(table => el('option', { value: table.name }, table.name)));
     await newApi();

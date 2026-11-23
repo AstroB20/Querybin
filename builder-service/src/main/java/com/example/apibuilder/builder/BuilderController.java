@@ -45,6 +45,10 @@ public class BuilderController {
     public record CurlRequest(Integer version, Map<String, String> params, Shell shell) {
     }
 
+    /** Small bit of server config the web page needs, chiefly where published APIs are served. */
+    public record UiConfig(String publicBaseUrl) {
+    }
+
     private final ApiBuilderService service;
     private final SchemaService schema;
     private final String publicBaseUrl;
@@ -54,6 +58,11 @@ public class BuilderController {
         this.service = service;
         this.schema = schema;
         this.publicBaseUrl = publicBaseUrl;
+    }
+
+    @GetMapping("/config")
+    public UiConfig config() {
+        return new UiConfig(baseUrl());
     }
 
     @GetMapping("/schema")

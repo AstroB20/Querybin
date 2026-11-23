@@ -1,5 +1,5 @@
--- The builder metadata (BUILDER schema) lives in its own schema so it can never be reached through a
--- published API. A published API can only read the target schema (PUBLIC by default).
+-- The builder's own storage. It is created in the builder's embedded metadata database, never in the
+-- target database, so it cannot be reached through a published API.
 CREATE SCHEMA IF NOT EXISTS BUILDER;
 
 CREATE TABLE IF NOT EXISTS BUILDER.API_ENDPOINT (

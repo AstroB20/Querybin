@@ -39,6 +39,7 @@ public class QueryRunner {
     /**
      * The driver returns legacy java.sql types, which serialize as UTC instants and so shift by the
      * server's time zone. Dates and timestamps without a zone must come back exactly as stored.
+     * Driver-specific objects (UUIDs, JSON, arrays, ...) are returned as their text form.
      */
     private static Object zoneless(Object value) {
         if (value instanceof java.sql.Date date) {
@@ -50,6 +51,10 @@ public class QueryRunner {
         if (value instanceof java.sql.Time time) {
             return time.toLocalTime();
         }
-        return value;
+        if (value == null || value instanceof Number || value instanceof CharSequence || value instanceof Boolean
+                || value instanceof java.time.temporal.Temporal || value instanceof byte[]) {
+            return value;
+        }
+        return value.toString();
     }
 }
