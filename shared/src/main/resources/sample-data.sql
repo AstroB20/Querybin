@@ -1,0 +1,26 @@
+-- Seeds the sample tables only while they are empty, so restarts keep any changes.
+INSERT INTO ACCOUNTS (ID, OWNER, CITY, TYPE, BALANCE, ACTIVE, OPENED_ON)
+SELECT * FROM (VALUES
+    (1, 'Asha Verma',  'Delhi',     'SAVINGS', 15200.50,  TRUE,  DATE '2021-03-14'),
+    (2, 'Rohan Mehta', 'Mumbai',    'CURRENT', 820.00,    TRUE,  DATE '2022-07-01'),
+    (3, 'Meera Nair',  'Kochi',     'SAVINGS', 48900.75,  TRUE,  DATE '2019-11-23'),
+    (4, 'Kabir Singh', 'Delhi',     'SAVINGS', 310.20,    FALSE, DATE '2020-01-09'),
+    (5, 'Ishita Rao',  'Bengaluru', 'CURRENT', 127500.00, TRUE,  DATE '2018-05-30'),
+    (6, 'Dev Patel',   'Ahmedabad', 'SAVINGS', 2400.00,   TRUE,  DATE '2023-02-17'),
+    (7, 'Sara Khan',   'Mumbai',    'SAVINGS', 9800.40,   TRUE,  DATE '2021-09-05'),
+    (8, 'Arjun Das',   'Kolkata',   'CURRENT', 0.00,      FALSE, DATE '2017-12-12')
+) AS V (ID, OWNER, CITY, TYPE, BALANCE, ACTIVE, OPENED_ON)
+WHERE NOT EXISTS (SELECT 1 FROM ACCOUNTS);
+
+INSERT INTO TRANSACTIONS (ID, ACCOUNT_ID, KIND, AMOUNT, CREATED_AT)
+SELECT * FROM (VALUES
+    (1, 1, 'DEPOSIT',    5000.00,  TIMESTAMP '2026-01-05 09:30:00'),
+    (2, 1, 'WITHDRAWAL', 1200.00,  TIMESTAMP '2026-01-12 14:05:00'),
+    (3, 3, 'DEPOSIT',    20000.00, TIMESTAMP '2026-02-01 10:00:00'),
+    (4, 5, 'TRANSFER',   45000.00, TIMESTAMP '2026-02-14 16:45:00'),
+    (5, 6, 'DEPOSIT',    900.00,   TIMESTAMP '2026-03-03 11:20:00'),
+    (6, 7, 'WITHDRAWAL', 300.00,   TIMESTAMP '2026-03-09 18:10:00'),
+    (7, 2, 'TRANSFER',   150.00,   TIMESTAMP '2026-03-21 08:55:00'),
+    (8, 5, 'WITHDRAWAL', 7500.00,  TIMESTAMP '2026-04-02 13:40:00')
+) AS V (ID, ACCOUNT_ID, KIND, AMOUNT, CREATED_AT)
+WHERE NOT EXISTS (SELECT 1 FROM TRANSACTIONS);

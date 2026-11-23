@@ -1,0 +1,546 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>API Builder</title>
+<style>
+  :root { --bg: #f4f5f9; --panel: #fff; --line: #d7dbe6; --text: #1d2433; --muted: #667085;
+          --accent: #3b5bdb; --danger: #c92a2a; --ok: #2b8a3e; }
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  body { margin: 0; font: 14px/1.45 system-ui, "Segoe UI", sans-serif; color: var(--text); background: var(--bg); }
+  header { padding: 14px 24px; background: var(--text); color: #fff; display: flex; align-items: baseline; gap: 16px; flex-wrap: wrap; }
+  header h1 { margin: 0; font-size: 18px; }
+  header span { color: #b6bdcf; }
+  .layout { display: grid; grid-template-columns: 250px minmax(0, 1fr); gap: 20px; padding: 20px 24px; align-items: start; }
+  aside, main { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 14px; }
+  aside ul { list-style: none; margin: 12px 0 0; padding: 0; }
+  aside li button { width: 100%; text-align: left; border: 0; background: none; padding: 8px; border-radius: 6px; }
+  aside li button:hover { background: var(--bg); }
+  aside li button.selected { background: #e7ecff; }
+  aside li small { display: block; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  aside .empty { color: var(--muted); padding: 8px; }
+  button, input, select { font: inherit; color: inherit; }
+  button { cursor: pointer; padding: 6px 12px; border: 1px solid var(--line); border-radius: 6px; background: #fff; }
+  button:disabled { cursor: not-allowed; opacity: .5; }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  button.danger { color: var(--danger); border-color: var(--danger); }
+  button.wide { width: 100%; }
+  input, select { padding: 6px 8px; border: 1px solid var(--line); border-radius: 6px; background: #fff; }
+  .tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--line); margin-bottom: 14px; }
+  .tabs button { border: 0; border-bottom: 2px solid transparent; border-radius: 0; background: none; padding: 8px 14px; }
+  .tabs button.active { border-bottom-color: var(--accent); color: var(--accent); font-weight: 600; }
+  .row, .line, .actions { display: flex; flex-wrap: wrap; gap: 10px; align-items: end; margin-bottom: 12px; }
+  .line { align-items: center; margin-bottom: 8px; }
+  label { display: flex; flex-direction: column; gap: 4px; color: var(--muted); font-size: 12px; }
+  label.grow { flex: 1; min-width: 200px; }
+  label.inline, label.chip { flex-direction: row; align-items: center; gap: 4px; color: var(--text); font-size: 14px; }
+  label.chip { border: 1px solid var(--line); border-radius: 16px; padding: 3px 10px; }
+  label.chip small { color: var(--muted); }
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; }
+  fieldset { border: 1px solid var(--line); border-radius: 8px; margin: 0 0 12px; padding: 10px 12px; }
+  legend { color: var(--muted); font-size: 12px; padding: 0 6px; }
+  .hint { color: var(--muted); margin: 0 0 12px; }
+  #message { padding: 8px 12px; border-radius: 6px; margin-bottom: 12px; }
+  #message.error { background: #fff0f0; color: var(--danger); }
+  #message.ok { background: #ebfbee; color: var(--ok); }
+  pre { background: var(--text); color: #e6e9f2; padding: 12px; border-radius: 8px; overflow-x: auto; white-space: pre-wrap; word-break: break-all; margin: 0 0 12px; }
+  table { border-collapse: collapse; width: 100%; margin-bottom: 12px; }
+  th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { color: var(--muted); font-weight: 600; font-size: 12px; }
+  .scroll { overflow-x: auto; }
+  .badge { background: #e7ecff; color: var(--accent); border-radius: 10px; padding: 1px 8px; font-size: 12px; margin-left: 6px; }
+  .changes { list-style: none; padding: 0; margin: 0 0 12px; }
+  .changes li { padding: 4px 0; }
+  .ADDED { color: var(--ok); } .REMOVED { color: var(--danger); } .CHANGED { color: #b35c00; }
+  .warnings { color: #b35c00; margin: 0 0 12px; padding-left: 18px; }
+  h3 { margin: 16px 0 8px; font-size: 14px; }
+  @media (max-width: 800px) { .layout { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<header>
+  <h1>API Builder</h1>
+  <span>Compose a query, publish it as an endpoint, and travel through its versions.</span>
+</header>
+
+<div class="layout">
+  <aside>
+    <button type="button" id="newApi" class="wide">+ New API</button>
+    <ul id="apiList"></ul>
+  </aside>
+
+  <main>
+    <nav class="tabs">
+      <button type="button" data-tab="build" class="active">Build</button>
+      <button type="button" data-tab="history">Time Machine</button>
+      <button type="button" data-tab="curl">cURL Builder</button>
+    </nav>
+    <div id="message" role="status" hidden></div>
+
+    <section id="tab-build">
+      <div class="row">
+        <label>API name <input id="slug" placeholder="high-balance" autocomplete="off" maxlength="63"></label>
+        <label class="grow">Description <input id="description" maxlength="500" autocomplete="off"></label>
+      </div>
+      <p class="hint" id="endpointHint"></p>
+      <div class="row">
+        <label>Table <select id="table"></select></label>
+        <label>Row limit <input id="limit" type="number" min="1" max="1000" value="100"></label>
+      </div>
+      <fieldset>
+        <legend>Columns to return</legend>
+        <div id="columns" class="chips"></div>
+      </fieldset>
+      <fieldset>
+        <legend>Filters (all must match)</legend>
+        <div id="filters"></div>
+        <button type="button" id="addFilter">+ Add filter</button>
+      </fieldset>
+      <fieldset>
+        <legend>Sort</legend>
+        <div id="sorts"></div>
+        <button type="button" id="addSort">+ Add sort</button>
+      </fieldset>
+      <fieldset id="previewParamsBox" hidden>
+        <legend>Parameter values to preview with</legend>
+        <div id="previewParams" class="row"></div>
+      </fieldset>
+      <div class="row">
+        <label class="grow">Version note <input id="note" maxlength="500" autocomplete="off" placeholder="What changed in this version?"></label>
+      </div>
+      <div class="actions">
+        <button type="button" id="preview">Preview</button>
+        <button type="button" id="publish" class="primary">Publish API</button>
+        <button type="button" id="delete" class="danger" hidden>Delete API</button>
+      </div>
+      <div id="previewOut" hidden>
+        <h3>Generated SQL</h3>
+        <pre id="previewSql"></pre>
+        <h3>Rows</h3>
+        <div id="previewRows" class="scroll"></div>
+      </div>
+    </section>
+
+    <section id="tab-history" hidden>
+      <div class="row">
+        <label>Compare version <select id="diffFrom"></select></label>
+        <label>with version <select id="diffTo"></select></label>
+        <button type="button" id="compare">Compare</button>
+      </div>
+      <ul id="diffOut" class="changes"></ul>
+      <div class="scroll">
+        <table>
+          <thead><tr><th>Version</th><th>Published</th><th>Description</th><th>Note</th><th></th></tr></thead>
+          <tbody id="versions"></tbody>
+        </table>
+      </div>
+      <div id="versionView" hidden>
+        <h3 id="versionTitle"></h3>
+        <pre id="versionJson"></pre>
+      </div>
+    </section>
+
+    <section id="tab-curl" hidden>
+      <div class="row">
+        <label>Version <select id="curlVersion"></select></label>
+        <label>Shell
+          <select id="curlShell">
+            <option value="BASH">bash / zsh</option>
+            <option value="POWERSHELL">PowerShell</option>
+          </select>
+        </label>
+      </div>
+      <fieldset>
+        <legend>Parameters (* required)</legend>
+        <div id="curlParams" class="row"></div>
+      </fieldset>
+      <pre id="curlCommand"></pre>
+      <ul id="curlWarnings" class="warnings" hidden></ul>
+      <div class="actions">
+        <button type="button" id="copyCurl">Copy command</button>
+        <button type="button" id="sendCurl" class="primary">Send request</button>
+      </div>
+      <div id="curlResponseBox" hidden>
+        <h3 id="curlStatus"></h3>
+        <pre id="curlResponse"></pre>
+      </div>
+    </section>
+  </main>
+</div>
+
+<script>
+  const $ = id => document.getElementById(id);
+  const state = { schema: [], current: null, versions: [], curlUrl: null, curlSeq: 0 };
+  const OPERATORS = [['EQ', '='], ['NE', '≠'], ['GT', '>'], ['GTE', '≥'], ['LT', '<'], ['LTE', '≤'],
+                     ['CONTAINS', 'contains'], ['STARTS_WITH', 'starts with']];
+
+  // Children are appended as text nodes, so data from the server is never parsed as HTML.
+  function el(tag, props = {}, ...children) {
+    const node = document.createElement(tag);
+    for (const [key, value] of Object.entries(props)) {
+      if (key === 'class') node.className = value;
+      else if (key.startsWith('on')) node.addEventListener(key.slice(2), value);
+      else if (key in node) node[key] = value;
+      else node.setAttribute(key, value);
+    }
+    node.append(...children);
+    return node;
+  }
+
+  async function call(method, url, body) {
+    const response = await fetch(url, {
+      method,
+      headers: body ? { 'Content-Type': 'application/json' } : {},
+      body: body ? JSON.stringify(body) : undefined
+    });
+    const text = await response.text();
+    let data = null;
+    try { data = text ? JSON.parse(text) : null; } catch (e) { /* not JSON */ }
+    if (!response.ok) throw new Error((data && (data.detail || data.title)) || `Request failed (${response.status})`);
+    return data;
+  }
+
+  function notify(text, kind) {
+    $('message').textContent = text || '';
+    $('message').className = kind || '';
+    $('message').hidden = !text;
+  }
+
+  async function guard(action) {
+    try { notify(''); await action(); } catch (e) { notify(e.message, 'error'); }
+  }
+
+  const apiPath = suffix => `/builder/apis/${encodeURIComponent(state.current.slug)}${suffix || ''}`;
+
+  // ---------- sidebar and tabs ----------
+
+  async function loadApis() {
+    const apis = await call('GET', '/builder/apis');
+    const items = apis.map(api => el('li', {},
+      el('button', {
+        type: 'button',
+        class: state.current && state.current.slug === api.slug ? 'selected' : '',
+        onclick: () => guard(() => selectApi(api.slug))
+      }, el('strong', {}, api.slug), el('span', { class: 'badge' }, `v${api.currentVersion}`),
+         el('small', {}, api.description || 'No description'))));
+    $('apiList').replaceChildren(...(items.length ? items : [el('li', { class: 'empty' }, 'No APIs published yet.')]));
+  }
+
+  function showTab(name) {
+    for (const button of document.querySelectorAll('.tabs button')) {
+      button.classList.toggle('active', button.dataset.tab === name);
+      $('tab-' + button.dataset.tab).hidden = button.dataset.tab !== name;
+    }
+  }
+
+  function setTabsEnabled(enabled) {
+    for (const button of document.querySelectorAll('.tabs button')) {
+      button.disabled = !enabled && button.dataset.tab !== 'build';
+    }
+  }
+
+  // ---------- build ----------
+
+  const currentTable = () => state.schema.find(table => table.name === $('table').value) || { columns: [] };
+
+  function renderColumns(selected) {
+    $('columns').replaceChildren(...currentTable().columns.map(column =>
+      el('label', { class: 'chip' },
+        el('input', { type: 'checkbox', value: column.name, checked: !selected || selected.includes(column.name) }),
+        column.name, el('small', {}, column.type.toLowerCase()))));
+  }
+
+  function columnSelect(value) {
+    const select = el('select', { class: 'col' },
+      ...currentTable().columns.map(column => el('option', { value: column.name }, column.name)));
+    if (value) select.value = value;
+    return select;
+  }
+
+  function addFilter(filter = {}) {
+    const operator = el('select', { class: 'op' }, ...OPERATORS.map(([value, label]) => el('option', { value }, label)));
+    if (filter.operator) operator.value = filter.operator;
+    const mode = el('select', { class: 'mode' },
+      el('option', { value: 'param' }, 'caller parameter'), el('option', { value: 'value' }, 'fixed value'));
+    const fixed = filter.param == null && filter.value != null;
+    mode.value = fixed ? 'value' : 'param';
+    const text = el('input', { class: 'text', autocomplete: 'off', value: (fixed ? filter.value : filter.param) || '' });
+    const required = el('label', { class: 'inline' },
+      el('input', { type: 'checkbox', class: 'required', checked: filter.required !== false }), 'required');
+    const sync = () => {
+      text.placeholder = mode.value === 'param' ? 'parameter name' : 'value';
+      required.hidden = mode.value !== 'param';
+    };
+    mode.addEventListener('change', sync);
+    sync();
+    const row = el('div', { class: 'line' }, columnSelect(filter.column), operator, mode, text, required,
+      el('button', { type: 'button', onclick: () => { row.remove(); renderPreviewParams(); } }, 'Remove'));
+    $('filters').append(row);
+    renderPreviewParams();
+  }
+
+  function addSort(sort = {}) {
+    const direction = el('select', { class: 'dir' },
+      el('option', { value: 'ASC' }, 'ascending'), el('option', { value: 'DESC' }, 'descending'));
+    if (sort.direction) direction.value = sort.direction;
+    const row = el('div', { class: 'line' }, columnSelect(sort.column), direction,
+      el('button', { type: 'button', onclick: () => row.remove() }, 'Remove'));
+    $('sorts').append(row);
+  }
+
+  function readDefinition() {
+    return {
+      table: $('table').value,
+      columns: [...$('columns').querySelectorAll('input:checked')].map(input => input.value),
+      filters: [...$('filters').children].map(row => {
+        const filter = { column: row.querySelector('.col').value, operator: row.querySelector('.op').value };
+        const text = row.querySelector('.text').value;
+        if (row.querySelector('.mode').value === 'param') {
+          filter.param = text.trim();
+          filter.required = row.querySelector('.required').checked;
+        } else {
+          filter.value = text;
+        }
+        return filter;
+      }),
+      sort: [...$('sorts').children].map(row =>
+        ({ column: row.querySelector('.col').value, direction: row.querySelector('.dir').value })),
+      limit: $('limit').value === '' ? null : Number($('limit').value)
+    };
+  }
+
+  const inputValues = box => Object.fromEntries(
+    [...box.querySelectorAll('input')].filter(input => input.value !== '').map(input => [input.dataset.name, input.value]));
+
+  function renderPreviewParams() {
+    const names = [...new Set([...$('filters').children]
+      .filter(row => row.querySelector('.mode').value === 'param')
+      .map(row => row.querySelector('.text').value.trim())
+      .filter(Boolean))];
+    const previous = inputValues($('previewParams'));
+    $('previewParams').replaceChildren(...names.map(name =>
+      el('label', {}, name, el('input', { 'data-name': name, autocomplete: 'off', value: previous[name] || '' }))));
+    $('previewParamsBox').hidden = !names.length;
+  }
+
+  function updateHint() {
+    const slug = state.current ? state.current.slug : $('slug').value.trim();
+    $('endpointHint').textContent = slug
+      ? `${state.current ? 'Served' : 'Will be served'} at GET ${location.origin}/api/${slug}`
+      : 'Pick a name: it becomes the URL of your API.';
+  }
+
+  function fillForm(detail) {
+    const definition = detail ? detail.definition : null;
+    $('slug').value = detail ? detail.slug : '';
+    $('slug').disabled = !!detail;
+    $('description').value = (detail && detail.description) || '';
+    $('note').value = '';
+    if (definition && state.schema.some(table => table.name === definition.table)) $('table').value = definition.table;
+    renderColumns(definition ? definition.columns : null);
+    $('filters').replaceChildren();
+    $('sorts').replaceChildren();
+    for (const filter of definition ? definition.filters : []) addFilter(filter);
+    for (const sort of definition ? definition.sort : []) addSort(sort);
+    $('limit').value = definition ? definition.limit : 100;
+    $('publish').textContent = detail ? 'Publish new version' : 'Publish API';
+    $('delete').hidden = !detail;
+    $('previewOut').hidden = true;
+    renderPreviewParams();
+    updateHint();
+    setTabsEnabled(!!detail);
+  }
+
+  function rowsTable(rows) {
+    if (!rows.length) return el('p', { class: 'hint' }, 'No rows matched.');
+    const keys = Object.keys(rows[0]);
+    return el('table', {},
+      el('thead', {}, el('tr', {}, ...keys.map(key => el('th', {}, key)))),
+      el('tbody', {}, ...rows.map(row =>
+        el('tr', {}, ...keys.map(key => el('td', {}, row[key] === null ? '—' : String(row[key])))))));
+  }
+
+  async function preview() {
+    const result = await call('POST', '/builder/preview',
+      { definition: readDefinition(), params: inputValues($('previewParams')) });
+    $('previewSql').textContent = result.sql;
+    $('previewRows').replaceChildren(rowsTable(result.rows));
+    $('previewOut').hidden = false;
+  }
+
+  async function publish() {
+    const body = { description: $('description').value, definition: readDefinition(), note: $('note').value };
+    const detail = state.current
+      ? await call('PUT', apiPath(), body)
+      : await call('POST', '/builder/apis', { slug: $('slug').value.trim(), ...body });
+    await selectApi(detail.slug);
+    notify(`Published ${detail.slug} as version ${detail.version}.`, 'ok');
+  }
+
+  async function removeApi() {
+    const slug = state.current.slug;
+    if (!confirm(`Delete "${slug}" and its entire version history? Callers of /api/${slug} will get 404.`)) return;
+    await call('DELETE', apiPath());
+    await newApi();
+    notify(`Deleted ${slug}.`, 'ok');
+  }
+
+  async function newApi() {
+    state.current = null;
+    state.versions = [];
+    fillForm(null);
+    showTab('build');
+    await loadApis();
+  }
+
+  async function selectApi(slug) {
+    state.current = await call('GET', `/builder/apis/${encodeURIComponent(slug)}`);
+    state.versions = await call('GET', apiPath('/versions'));
+    fillForm(state.current);
+    renderHistory();
+    renderCurlForm();
+    await loadApis();
+  }
+
+  // ---------- time machine ----------
+
+  function versionOptions(select, selected) {
+    select.replaceChildren(...state.versions.map(version =>
+      el('option', { value: String(version.version) }, `v${version.version}`)));
+    select.value = String(selected);
+  }
+
+  function renderHistory() {
+    const current = state.current.currentVersion;
+    $('versions').replaceChildren(...state.versions.map(version => el('tr', {},
+      el('td', {}, `v${version.version}`, ...(version.version === current ? [el('span', { class: 'badge' }, 'current')] : [])),
+      el('td', {}, new Date(version.publishedAt).toLocaleString()),
+      el('td', {}, version.description || '—'),
+      el('td', {}, version.note || '—'),
+      el('td', {}, el('div', { class: 'line' },
+        el('button', { type: 'button', onclick: () => viewVersion(version) }, 'View'),
+        el('button', { type: 'button', disabled: version.version === current,
+                       onclick: () => guard(() => rollback(version.version)) }, 'Roll back'))))));
+    versionOptions($('diffFrom'), Math.max(1, current - 1));
+    versionOptions($('diffTo'), current);
+    $('diffOut').replaceChildren();
+    $('versionView').hidden = true;
+  }
+
+  function viewVersion(version) {
+    $('versionTitle').textContent = `Definition of v${version.version}, still served at GET /api/${version.slug}/v/${version.version}`;
+    $('versionJson').textContent = JSON.stringify(version.definition, null, 2);
+    $('versionView').hidden = false;
+  }
+
+  async function compare() {
+    const diff = await call('GET', apiPath(`/diff?from=${$('diffFrom').value}&to=${$('diffTo').value}`));
+    const items = diff.changes.map(change => {
+      const detail = change.kind === 'CHANGED'
+        ? `${change.before === null ? '(none)' : change.before} → ${change.after === null ? '(none)' : change.after}`
+        : (change.kind === 'ADDED' ? change.after : change.before);
+      return el('li', {}, el('strong', { class: change.kind }, change.kind.toLowerCase()), ` ${change.field}: ${detail}`);
+    });
+    $('diffOut').replaceChildren(...(items.length ? items
+      : [el('li', {}, `v${diff.from} and v${diff.to} are identical.`)]));
+  }
+
+  async function rollback(version) {
+    if (!confirm(`Publish the contents of v${version} again as a new version?`)) return;
+    const detail = await call('POST', apiPath(`/versions/${version}/rollback`));
+    await selectApi(detail.slug);
+    showTab('history');
+    notify(`Rolled back to v${version}; it is now published as v${detail.version}.`, 'ok');
+  }
+
+  // ---------- cURL builder ----------
+
+  function curlTarget() {
+    const chosen = $('curlVersion').value;
+    return chosen === '' ? state.current : state.versions.find(version => String(version.version) === chosen);
+  }
+
+  function renderCurlForm() {
+    $('curlVersion').replaceChildren(
+      el('option', { value: '' }, `Latest (currently v${state.current.currentVersion})`),
+      ...state.versions.map(version => el('option', { value: String(version.version) }, `Pinned to v${version.version}`)));
+    $('curlResponseBox').hidden = true;
+    renderCurlParams();
+  }
+
+  function renderCurlParams() {
+    const previous = inputValues($('curlParams'));
+    const inputs = curlTarget().parameters.map(parameter =>
+      el('label', {}, parameter.name + (parameter.required ? ' *' : ''),
+        el('input', { 'data-name': parameter.name, autocomplete: 'off', value: previous[parameter.name] || '',
+                      placeholder: parameter.type ? parameter.type.toLowerCase() : '',
+                      oninput: () => guard(updateCurl) })));
+    $('curlParams').replaceChildren(...(inputs.length ? inputs
+      : [el('span', { class: 'hint' }, 'This version takes no parameters.')]));
+    return guard(updateCurl);
+  }
+
+  async function updateCurl() {
+    const seq = ++state.curlSeq;
+    const chosen = $('curlVersion').value;
+    const result = await call('POST', apiPath('/curl'), {
+      version: chosen === '' ? null : Number(chosen),
+      shell: $('curlShell').value,
+      params: inputValues($('curlParams'))
+    });
+    if (seq !== state.curlSeq) return; // a newer keystroke already asked again
+    state.curlUrl = result.url;
+    $('curlCommand').textContent = result.command;
+    $('curlWarnings').replaceChildren(...result.warnings.map(warning => el('li', {}, warning)));
+    $('curlWarnings').hidden = !result.warnings.length;
+  }
+
+  async function sendCurl() {
+    const response = await fetch(state.curlUrl, { headers: { Accept: 'application/json' } });
+    const text = await response.text();
+    let shown = text;
+    try { shown = JSON.stringify(JSON.parse(text), null, 2); } catch (e) { /* show as received */ }
+    $('curlStatus').textContent = `Response: HTTP ${response.status}`;
+    $('curlResponse').textContent = shown;
+    $('curlResponseBox').hidden = false;
+  }
+
+  // ---------- wiring ----------
+
+  for (const button of document.querySelectorAll('.tabs button')) {
+    button.addEventListener('click', () => showTab(button.dataset.tab));
+  }
+  $('newApi').addEventListener('click', () => guard(newApi));
+  $('slug').addEventListener('input', updateHint);
+  $('table').addEventListener('change', () => {
+    renderColumns(null);
+    $('filters').replaceChildren();
+    $('sorts').replaceChildren();
+    renderPreviewParams();
+  });
+  $('filters').addEventListener('input', renderPreviewParams);
+  $('addFilter').addEventListener('click', () => addFilter());
+  $('addSort').addEventListener('click', () => addSort());
+  $('preview').addEventListener('click', () => guard(preview));
+  $('publish').addEventListener('click', () => guard(publish));
+  $('delete').addEventListener('click', () => guard(removeApi));
+  $('compare').addEventListener('click', () => guard(compare));
+  $('curlVersion').addEventListener('change', renderCurlParams);
+  $('curlShell').addEventListener('change', () => guard(updateCurl));
+  $('copyCurl').addEventListener('click', () => guard(async () => {
+    await navigator.clipboard.writeText($('curlCommand').textContent);
+    notify('Copied the curl command.', 'ok');
+  }));
+  $('sendCurl').addEventListener('click', () => guard(sendCurl));
+
+  guard(async () => {
+    if (/Win/i.test(navigator.userAgent)) $('curlShell').value = 'POWERSHELL';
+    state.schema = await call('GET', '/builder/schema');
+    $('table').replaceChildren(...state.schema.map(table => el('option', { value: table.name }, table.name)));
+    await newApi();
+  });
+</script>
+</body>
+</html>
